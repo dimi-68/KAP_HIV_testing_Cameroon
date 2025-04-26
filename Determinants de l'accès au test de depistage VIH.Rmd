@@ -1,0 +1,955 @@
+---
+title: "Determinants de l'accès au test de depistage VIH"
+author: |
+  Dimitry Yonta  
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+    theme: flatly              
+    highlight: tango           
+    toc: true                  
+    toc_depth: 3               
+    toc_float:                 
+      collapsed: true          
+      smooth_scroll: true      
+    code_folding: hide         
+    number_sections: true      
+    df_print: paged            
+    css: "custom.css"          
+params:                         
+  dataset: "data.csv"
+---
+
+```{css, echo=FALSE}
+p {
+  text-align: justify;
+  font-size: 20px;
+}
+pre {
+  font-size: 20px; 
+}
+
+code {
+  font-size: 20px; 
+}
+---
+
+knitr::opts_chunk$set(fig.width=10, fig.height=6)
+```
+
+Après six décennies de lutte contre le virus de l'immunodéficience humaine (VIH), l'infection demeure un problème majeur de santé publique, notamment en Afrique subsaharienne où la transmission reste particulièrement élevée. En réponse à cette crise, le Programme commun des Nations Unies sur le VIH/sida (ONUSIDA) et d'autres organisations internationales ont mis en œuvre plusieurs stratégies, fixant notamment l'objectif ambitieux 95-95-95 à atteindre d'ici 2030 : 95 % des personnes vivant avec le VIH doivent connaître leur statut sérologique, 95 % de celles diagnostiquées doivent accéder au traitement antirétroviral, et 95 % des personnes sous traitement doivent obtenir une suppression virale.
+
+Au Cameroun, selon les résultats de l'Enquête Démographique et de Santé (EDS) de 2018, des progrès notables ont été accomplis. Cependant, le dépistage du VIH, porte d'entrée vers la cascade de soins, demeure insuffisant. Dans ce contexte, notre étude vise à explorer les déterminants de l'accès au dépistage du VIH au Cameroun, en mettant l'accent sur le niveau de connaissances sur le VIH, les attitudes discriminatoires et les pratiques sexuelles.
+
+Nous utiliserons les données de l'EDS 2018 et adopterons une approche cas-témoins :
+
+-  Les cas seront les individus ayant réalisé un test de dépistage du VIH au cours des 12 mois précédant l'enquête.
+
+-  Les témoins seront ceux n'ayant pas effectué de dépistage au cours de la même période.
+
+La relation entre les facteurs d'intérêt et la réalisation du test sera modélisée à l'aide d'une régression logistique, permettant d'identifier les groupes à risque de non-dépistage et de proposer des actions ciblées pour accélérer l'atteinte de l'objectif 95-95-95.
+
+## Importation des donnees, selection des variables et recodage. 
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE,warning=FALSE}
+## Chargement des packages et definitions des parametres-----
+
+if (!require(pacman)) install.packages("pacman")
+
+pacman::p_load(foreign, haven,tidyverse,survey,gtsummary,rio,here,flextable,janitor, forcats, labelled)
+
+theme_gtsummary_language( "fr", decimal.mark = ",", big.mark = " ")
+
+## Importation de la base----
+
+base_homme <- read_sas("C:/Users/DELL/OneDrive/Desktop/Mes Projets_R/epidemioR/DHS SAS/CMMR71SD/Bon.SAS7BDAT")
+
+base_femme <- read_sas('C:/Users/DELL/OneDrive/Desktop/Mes Projets_R/epidemioR/DHS SAS/CMIR71SD/BONN.SAS7BDAT')
+
+
+## Selection des variables----
+
+base_EDS_homme <- base_homme %>%
+  select(MCASEID,MV001, MV002, MV003,MV005,MV012,MV013 ,MV021,MV023,MV024, MV025, MV106,MV130, MV190,MV481,MV501,
+         MV503, MV504, MV505,MV511,MV525,MV529,MV531,MV714,MV750,MV751, MV754CP,MV754DP,MV756,MV754JP,MV823,MV754WP,MV763A,MV774C,MV774B,MV774A,
+         MV824,MV783,MV856,MV857A,MV527,MV825,MV832B,MV832C,MV852A,MV852B,MV852C,MV857C,MV857D,MV857B,MV858,MV777A,MV766A,MV766B,MV826A,MV833A,MV833B,MV833C,MV836,
+         MV793,MV791A,MV793B,MV525,MV781,MV828)
+
+
+base_EDS_femme <- base_femme %>% 
+  select(CASEID,V001, V002, V003,V005,V012,V013,V021,V023, V024,V763A, V025, V106, V130, V190,V481, V501, V503,
+         V504, V505,V511,V525,V529,V531,V714,V750,V751, V754CP,V754DP,V756,V754JP,V823,V754WP,V774C,V774B,V774A,V824,V826A,
+         V783,V856,V857A,V825,V527,V832B,V832C,V852A,V852B,V852C,V857C,V857D,V857B,V858,V777A,V766A,V766B,V833A,V833B,V833C,V836,V525,
+         V781,V828, V791A)
+
+base_EDS_femme <- base_EDS_femme %>% 
+  mutate( SEXE = ifelse(!is.na(CASEID), "Feminin","o")) #creaction de la variables sexe dans la base des femmes 
+
+
+base_EDS_homme <- base_EDS_homme %>% 
+  mutate( SEXE = ifelse(!is.na(MCASEID), "Masculin","o"))
+
+## Renommons les variables----
+
+base_EDS_femme <- base_EDS_femme %>% 
+  rename(MCASEID =CASEID,MV001=V001, MV002 =V002,
+         MV003 = V003,MV005= V005,MV012 =V012,MV013 =V013,MV021 =V021,MV023 =V023 ,MV024 =V024,
+         MV025 =V025, MV529 = V529, MV106 = V106,MV130 =V130, MV190 =V190,MV481 = V481,MV501 = V501,
+         MV503 = V503, MV504= V504, MV505=V505,MV511 = V511,MV525=V525,MV527 = V527,MV714 = V714,MV750=V750,MV751 = V751 ,MV754CP=V754CP,MV754DP =V754DP,
+         MV756 = V756,MV754JP = V754JP,MV823 = V823,MV754WP = V754WP,MV774C = V774C,MV763A =V763A,
+         MV774B = V774B,MV774A = V774A,MV824 = V824,MV783 = V783,MV856 = V856,
+         MV857A = V857A,MV825 = V825,MV826A = V826A,MV857C = V857C,MV857D = V857D,MV857B=V857B,MV858 = V858,
+         MV777A =V777A,MV766A= V766A,MV766B = V766B,MV832C = V832C,MV832B = V832B,MV852A=V852A,MV852B = V852B,MV852C=V852C,MV833A = V833A,MV833B = V833B,MV833C = V833C,MV836 = V836,
+         MV781 = V781,MV828 = V828, MV791A = V791A)
+
+## Reorganisation des variables----
+
+base_EDS_homme <- base_EDS_homme %>% 
+  select( MCASEID,MV001, MV002, MV003,MV005,MV511,MV012,MV013,MV021,MV023 ,MV024, MV025,SEXE, MV106,MV130, MV190,MV481,MV501,
+          MV503, MV504, MV505,MV525,MV527,MV529,MV714,MV750,MV751, MV754CP,MV754DP,MV756,MV754JP,MV823,MV754WP,MV763A,MV774C,MV774B,MV774A,
+          MV824,MV783,MV856,MV857A,MV825,MV826A,MV832B,MV832C,MV852A,MV852B,MV852C,MV857C,MV857D,MV857B, MV858,MV777A,MV766A,MV766B,MV833A,MV833B,MV833C,MV836,
+          MV791A,MV525,MV781,MV828)
+
+base_EDS_femme <- base_EDS_femme %>% 
+  select(MCASEID,MV001, MV002, MV003,MV005,MV012,MV013,MV021,MV023 ,MV024, MV025,SEXE, MV106,MV130, MV190,MV481,MV501,
+         MV503, MV504, MV505,MV511,MV525,MV527,MV529,MV714,MV750,MV751, MV754CP,MV754DP,MV756,MV754JP,MV823,MV754WP,MV763A,MV774C,MV774B,MV774A,
+         MV824,MV783,MV856,MV857A,MV825,MV826A,MV832B,MV832C,MV852A,MV852B,MV852C,MV857C,MV857D,MV857B,MV858,MV777A,MV766A,MV766B,MV833A,MV833B,MV833C,MV836,
+         MV791A,MV525,MV781,MV828)
+
+## Fusion des lignes de la base de donnees des hommes et femmes----
+fusion <- bind_rows(base_EDS_femme,base_EDS_homme)
+
+# Recodage de la base de donnees et creaction des variables d'interet----
+
+basefr <- fusion %>%
+  mutate(MV013 = case_when(
+    MV013 == 1 ~ "15-19",
+    MV013 == 2 ~ "20-24",
+    MV013 == 3 ~ "25-29",
+    MV013 == 4 ~ "30-34",
+    MV013 == 5 ~ "35-39",
+    MV013 == 6 ~ "40-44",
+    MV013 == 7 ~ "45-49",
+    MV013 == 8 ~ "50-54",
+    MV013 == 9 ~ "55-59",
+    MV013 == 10 ~ "60-64")) %>%
+  mutate(MV024 = case_when(
+    MV024 == 1 ~ "Adamawa",
+    MV024 == 2 ~ "Centre (sans Yaoundé)",
+    MV024 == 3 ~ "Douala",
+    MV024 == 4 ~ "Est",
+    MV024 == 5 ~ "Extrême-Nord",
+    MV024 == 6 ~ "Littoral (sans Douala)",
+    MV024 == 7 ~ "Nord",
+    MV024 == 8 ~ "Nord-Ouest",
+    MV024 == 9 ~ "Ouest",
+    MV024 == 10 ~ "Sud",
+    MV024 == 11 ~ "Sud-Ouest",
+    MV024 == 12 ~ "Yaoundé"
+  )) %>%
+  mutate(MV025 = case_when(
+    MV025 == 1 ~ "Urbain",
+    MV025 == 2 ~ "rural"
+  )) %>%
+  mutate(MV106 = case_when(
+    MV106 == 0 ~ "Pas d'éducation",
+    MV106 == 1 ~ "Primaire",
+    MV106 == 2 ~ "Secondaire",
+    MV106 == 3 ~ "Supérieur",
+    MV106 == 9 ~ "Manquant"
+  )) %>%
+  mutate(MV130 = case_when(
+    MV130 == 1 ~ "Chretien",
+    MV130 == 2 ~ "Chretien",
+    MV130 == 3 ~ "Chretien",
+    MV130 == 4 ~ "Musulman",
+    MV130 == 5 ~ "Animiste",
+    MV130 == 7 ~ "Aucun",
+    MV130 == 96 ~ "Autre",
+    MV130 == 99 ~ "Manquant"
+  )) %>%
+  mutate(MV190 = case_when(
+    MV190 == 1~ "pauvre",
+    MV190 == 2~ "pauvre",
+    MV190 == 3~ "Milieu",
+    MV190 == 4~ "riche",
+    MV190 == 5~ "riche"
+  )) %>%
+  mutate( MV501 = case_when (
+    MV501 == 0 ~ "Jamais en union",
+    MV501 == 1 ~ "Marié",
+    MV501 == 2 ~ "Vivre avec partenaire",
+    MV501 == 3 ~ "Veuf",
+    MV501 == 4 ~ "Divorcé",
+    MV501 == 5 ~ "Ne plus vivre ensemble/séparés",
+    MV501 == 9 ~ "Manquant"
+  )) %>%
+  mutate(MV505 = case_when(
+    MV505 == 0 ~ "0",
+    MV505 == 1 ~ "1",
+    MV505 >= 2 & MV505 < 6 ~ "2-5",
+    MV505 >= 6 & MV505 < 10 ~ "6-9",
+    MV505 == 98 ~ "Manquant"
+  )) %>%
+  mutate( MV504 = case_when (
+    MV504 == 1 ~ "Vivre avec lui",
+    MV504 == 2 ~ "Rester ailleurs",
+    MV504 == 9 ~ "Manquant",)) %>%
+  mutate( MV777A = case_when (
+    MV777A == 0 ~ "Non",
+    MV777A == 1 ~ "Oui",
+    MV777A == 8 ~ "Je ne sais pas",
+    MV777A == 9~ "Manquant")) %>%
+  mutate( MV781 = case_when (
+    MV781 == 0 ~ "Non",
+    MV781 == 1 ~ "Oui",
+    MV781 == 9~ "Manquant")) %>%
+  mutate( MV791A = case_when (
+    MV791A == 0 ~ "Non",
+    MV791A == 1 ~ "Oui",
+    MV791A == 9~ "Manquant")) %>%
+  mutate( MV825 = case_when (
+    MV825 == 0 ~ "Non",
+    MV825 == 1 ~ "Oui",
+    MV825 == 8 ~ "Je ne sais pas",
+    MV825 == 9~ "Manquant")) %>%
+  mutate( MV833A = case_when (
+    MV833A == 0 ~ "Non",
+    MV833A == 1 ~ "Oui",
+    MV833A == 9~ "Manquant")) %>%
+  mutate( MV833B = case_when (
+    MV833B == 0 ~ "Non",
+    MV833B == 1 ~ "Oui",
+    MV833B == 9~ "Manquant")) %>%
+  mutate( MV833C = case_when (
+    MV833C == 0 ~ "Non",
+    MV833C == 1 ~ "Oui",
+    MV833C == 9~ "Manquant")) %>% 
+  mutate( MV856 = case_when (
+    MV856 == 0 ~ "Jamais entendu parler de kits de test VIH",
+    MV856 == 1 ~ "A testé avec des kits de test VIH",
+    MV856 == 2 ~ "Connaît les kits de test mais n'a jamais testé avec eux",
+    MV856 == 3 ~ "Connaît les kits de test inconnus s'ils sont testés",
+    MV856 == 9~ "Manquant")) %>%
+  mutate( MV857A = case_when (
+    MV857A == 0 ~ "Non",
+    MV857A == 1 ~ "Oui",
+    MV857A == 8 ~ "Ne sait pas",
+    MV857A == 9~ "Manquant")) %>%
+  mutate( MV857B = case_when (
+    MV857B == 0 ~ "Non",
+    MV857B == 1 ~ "Oui",
+    MV857B == 8 ~ "Ne sait pas",
+    MV857B == 9~ "Manquant")) %>%
+  mutate( MV857C = case_when (
+    MV857C == 0 ~ "Non",
+    MV857C == 1 ~ "Oui",
+    MV857C == 8 ~ "Ne sait pas",
+    MV857C == 9~ "Manquant")) %>%
+  mutate( MV857D = case_when (
+    MV857D == 0 ~ "Non",
+    MV857D == 1 ~ "Oui",
+    MV857D == 8 ~ "Ne sait pas",
+    MV857D == 9~ " Manquant ")) %>%
+  mutate( MV828 = case_when (
+    MV828 == 0 ~ "Non",
+    MV828 == 1 ~ "Oui",
+    MV828 == 9~ "Manquant")) %>% 
+  mutate(MV481 = case_when(
+    MV481 == 0 ~ "Non",
+    MV481 == 1 ~ "Oui"))
+
+# Scoring attitudes
+basefr <- basefr %>% 
+  mutate(MV825_rec= case_when(
+    MV825 == "Oui" ~ -1,
+    MV825 == "Non" ~ 1,
+    MV825 == "Je ne sais pas" ~ 0
+  ))
+basefr <- basefr %>% 
+  mutate(MV857A_rec= case_when(
+    MV857A == "Oui" ~ -1,
+    MV857A == "Non" ~ 1,
+    MV857A == "Ne sait pas" ~ 0
+  ))
+basefr <- basefr %>% 
+  mutate(MV857D_rec= case_when(
+    MV857D == "Oui" ~ 1,
+    MV857D == "Non" ~ -1,
+    MV857D == "Ne sait pas" ~ 0
+  ))
+basefr <- basefr %>% 
+  mutate(MV777A_rec= case_when(
+    MV777A == "Oui" ~ 1,
+    MV777A == "Non" ~ -1,
+    MV777A == "Je ne sais pas" ~ 0
+  )) %>% 
+  mutate(MV858_rec= case_when(
+    MV858 == 1 ~ -1,
+    MV858 == 2 ~ -1,
+    MV858 == 0 ~ 1,
+    MV858 == 8 ~ 0))
+
+##Creation du score des connaissances des moyens de prevention et de transmission
+
+basefr <- basefr %>% 
+  
+  rowwise %>% 
+  
+  mutate(score_connaissance_prevention = sum(c(MV754CP,MV754DP) == 1)) %>% 
+  
+  mutate(score_connaissance_transmission = sum(c(MV754WP,MV823,MV754JP) == 0,MV756== 1))
+
+##Creation du score des connaissances de la TME
+basefr <- basefr %>% 
+  rowwise %>%
+  
+  mutate(score_connaissance_TME =sum(c(MV774C,MV774B,MV774A,MV824) == 1, na.rm = T))
+
+#creation du score des attitudes
+
+basefr <- basefr %>% 
+  
+  rowwise %>% 
+  
+  mutate(score_attitude = sum(c(MV857A_rec,MV825_rec,MV777A_rec,MV857D_rec,MV858_rec)))
+
+## Partenaire sexuel simultanees
+basefr <- basefr %>% 
+  mutate( MV832B_days = case_when(
+    MV832B < 200 ~ MV832B - 100,
+    MV832B > 200 & MV832B < 300 ~ ( MV832B - 200 ) * 7,
+    MV832B > 300 ~ ( MV832B - 300 ) * 30
+  )) %>%
+  mutate(MV832C_days = case_when(
+    MV832C < 200 ~ MV832C- 100,
+    MV832C > 200 & MV832C < 300 ~ ( MV832C - 200 ) * 7,
+    MV832C > 300 ~ ( MV832C - 300 ) * 30
+  )) %>% 
+  mutate(MV852B_days = case_when(
+    MV852B < 200 ~ MV852B - 100,
+    MV852B > 200 & MV852B < 300 ~ ( MV852B - 200 ) * 7,
+    MV852B > 300 & MV852B < 400 ~ ( MV852B - 300 ) * 30,
+    MV852B > 400 ~ ( MV852B - 400 ) * 365,
+  )) %>%
+  mutate(MV852C_days = case_when(
+    MV852C < 200 ~ MV852C - 100,
+    MV852C > 200 & MV852C < 300 ~ ( MV852C - 200 ) * 7,
+    MV852C > 300 & MV852C < 400 ~ ( MV852C - 300 ) * 30,
+    MV852C > 400 ~ (  MV852C - 400 ) * 365
+  )) %>%
+  mutate(MV527_days = case_when(
+    MV527 < 200 ~ MV527 - 100,
+    MV527 > 200 & MV527 < 300 ~ ( MV527 - 200 ) * 7,
+    MV527 > 300 ~ ( MV527 - 300 ) * 30)) %>%
+  mutate(MV852A_days = case_when(
+    MV852A < 200 ~ MV852A - 100,
+    MV852A > 200 & MV852A < 300 ~ ( MV852A - 200 ) * 7,
+    MV852A > 300 & MV852A < 400 ~ ( MV852A - 300 ) * 30,
+    MV852A > 00 ~ ( MV852A - 400 ) * 365
+  ))
+
+basefr <- basefr %>% 
+  mutate(Si_2eme_partenaire = MV832B_days +MV852B_days) %>% 
+  mutate(Si_3eme_partenaire = MV832C_days +MV852C_days) %>% 
+  mutate(Si_1er_partenaire = MV527_days +MV852A_days)
+
+basefr <- basefr %>% 
+  mutate(rapports_multiples = case_when(
+    MV766B == 0 ~ "Aucun partenaire au cours des 12 derniers mois",
+    MV766B == 1 ~ "Ont eu Un partenaire au cours des 12 derniers mois",
+    MV766B == 2 & Si_1er_partenaire <= MV527_days ~ "Ont eu 2 partenaires au cours des 12 derniers mois,sans chevauchement",
+    MV766B == 2 & Si_1er_partenaire > MV527_days ~ "Ont eu 2 partenaires se chevauchant au cours des 12 derniers mois",
+    MV766B > 2 & Si_2eme_partenaire <= MV832C_days ~ "Ont eu plus de 2 partenaires au cours des 12 derniers mois,sans chevauchement",
+    MV766B > 2 & Si_2eme_partenaire > MV832C_days ~ "Ont eu plus de 2  partenaires se chevauchant au cours des 12 derniers mois",
+  ))
+
+## rapports sexuels prenuptiaux
+basefr <- basefr %>%
+  mutate(rapports_prenuptiaux = case_when( ## Rapports sexuels avant le marriage
+    MV525 == 0  ~ "Non",
+    is.na(MV511) & MV525 != 0 ~ "Oui",
+    MV511 <= MV525 & MV525 != 0 ~ "Non",
+    MV511 > MV525 & MV525 != 0 ~ "Oui"
+  ))
+## Rapports sexuels precoce
+basefr <- basefr %>% 
+  mutate(MV525_r= case_when (
+    MV525== 0 ~ "Non",
+    MV525 >=8 & MV525 <= 15 ~ "Oui",
+    MV525 >=16 & MV525 <= 49 ~ "Non"))
+
+
+basefr <- basefr %>% 
+  mutate(MV858 = case_when(
+    MV858 == 0 ~ "Non",
+    MV858 ==1~ "Oui",
+    MV858 ==2~ "il dit qu'il a le VIH",
+    MV858 ==8~ "je ne sais pas"
+  )) %>% 
+  mutate( MV754CP = case_when (
+    MV754CP == 0 ~ "Non",
+    MV754CP == 1 ~ "Oui",
+    MV754CP == 8 ~ "Je ne sais pas",
+    MV754CP == 9~ "Manquant")) %>%
+  mutate( MV754DP = case_when (
+    MV754DP == 0 ~ "Non",
+    MV754DP == 1 ~ "Oui",
+    MV754DP == 8 ~ "Je ne sais pas",
+    MV754DP == 9~ "Manquant")) %>%
+  mutate( MV754JP = case_when (
+    MV754JP == 0 ~ "Non",
+    MV754JP == 1 ~ "Oui",
+    MV754JP == 8 ~ "Je ne sais pas",
+    MV754JP == 9~ "Manquant")) %>%
+  mutate( MV756 = case_when (
+    MV756 == 0 ~ "Non",
+    MV756 == 1 ~ "Oui",
+    MV756 == 8 ~ "Ne sait pas",
+    MV756 == 9~ "Manquant")) %>%
+  mutate( MV824 = case_when (
+    MV824 == 0 ~ "Non",
+    MV824 == 1 ~ "Oui",
+    MV824 == 8 ~ "Je ne sais pas",
+    MV824 == 9~ "Manquant")) %>%
+  mutate( MV754WP = case_when (
+    MV754WP == 0 ~ "Non",
+    MV754WP == 1 ~ "Oui",
+    MV754WP == 8 ~ "Je ne sais pas",
+    MV754WP == 9~ "Manquant")) %>%
+  mutate( MV750 = case_when (
+    MV750 == 0 ~ "Non",
+    MV750 == 1 ~ "Oui",
+    MV750 == 8 ~ "Ne sait pas",
+    MV750 == 9~ "Manquant")) %>%
+  mutate( MV774A = case_when (
+    MV774A == 0 ~ "Non",
+    MV774A == 1 ~ "Oui",
+    MV774A == 8 ~ "Ne sait pas",
+    MV774A == 9~ "Manquant")) %>%
+  mutate( MV774B = case_when (
+    MV774B == 0 ~ "Non",
+    MV774B == 1 ~ "Oui",
+    MV774B == 8 ~ "Ne sait pas",
+    MV774B == 9~ "Manquant")) %>%
+  mutate( MV774C = case_when (
+    MV774C == 0 ~ "Non",
+    MV774C == 1 ~ "Oui",
+    MV774C == 8 ~ "Ne sait pas",
+    MV774C == 9~ "Manquant")) %>%
+  mutate( MV783 = case_when (
+    MV783 == 0 ~ "Non",
+    MV783 == 1 ~ "Oui")) %>%
+  mutate( MV714 = case_when (
+    MV714 == 0 ~ "Non",
+    MV714 == 1 ~ "Oui",
+    MV714 == 9~ "Manquant")) %>%
+  mutate( MV823 = case_when (
+    MV823 == 0 ~ "Non",
+    MV823 == 1 ~ "Oui",
+    MV823 == 8 ~ "Je ne sais pas",
+    MV823 == 9~ " Manquant ")) %>%
+  mutate( MV763A = case_when (
+    MV763A == 0 ~ "Non",
+    MV763A == 1 ~ "Oui",
+    MV763A == 8 ~ "Je ne sais pas",
+    MV763A == 9~ "Manquant")) %>%
+  mutate( MV751 = case_when (
+    MV751 == 0 ~ "Non",
+    MV751 == 1 ~ "Oui",
+    MV751 == 9~ "Manquant"))
+
+basefr$MV130 <- basefr$MV130 %>%
+  fct_relevel(
+    "Aucun", "Animiste", "Chretien", "Musulman", "Autre"
+  ) 
+## Réordonnancement de basefr$MV777A
+basefr$MV777A <- basefr$MV777A %>%
+  fct_relevel(
+    "Je ne sais pas", "Oui", "Non"
+  )
+## Réordonnancement de basefr$MV825
+basefr$MV825 <- basefr$MV825 %>%
+  fct_relevel(
+    "Je ne sais pas", "Oui", "Non"
+  )
+## Réordonnancement de basefr$MV857A
+basefr$MV857A <- basefr$MV857A %>%
+  fct_relevel(
+    "Ne sait pas", "Oui", "Non"
+  )
+## Réordonnancement de basefr$MV857B
+basefr$MV857B <- basefr$MV857B %>%
+  fct_relevel(
+    "Ne sait pas", "Oui", "Non"
+  )
+## Réordonnancement de basefr$MV857C
+basefr$MV857C <- basefr$MV857C %>%
+  fct_relevel(
+    "Ne sait pas", "Oui", "Non"
+  )
+## Réordonnancement de basefr$MV857D
+basefr$MV857D <- basefr$MV857D %>%
+  fct_relevel(
+    "Ne sait pas", "Oui", "Non"
+  )
+## Réordonnancement de basefr$SEXE
+basefr$SEXE <- factor(basefr$SEXE,
+                      levels = c("Masculin", "Feminin"))
+
+
+
+## Réordonnancement de basefr$MV190
+basefr$MV190 <- basefr$MV190 %>%
+  fct_relevel(
+    "pauvre", "Milieu", "riche"
+  )
+## Réordonnancement de basefr$MV833A
+basefr$MV833A <- basefr$MV833A %>%
+  fct_relevel(
+    "Oui", "Non"
+  )
+## Réordonnancement de basefr$rapports_Multiples
+basefr$rapports_multiples <- basefr$rapports_multiples %>%
+  fct_relevel(
+    "Aucun partenaire au cours des 12 derniers mois", "Ont eu Un partenaire au cours des 12 derniers mois",
+    " Ont eu 2 partenaires au cours des 12 derniers mois,sans chevauchement",
+    " Ont eu 2 partenaires se chevauchant au cours des 12 derniers mois",
+    " Ont eu plus de 2 partenaires au cours des 12 derniers mois,sans chevauchement",
+    " Ont eu plus de 2  partenaires se chevauchant au cours des 12 derniers mois"
+  )
+## Réordonnancement de basefr$rapports_prenuptiaux
+basefr$rapports_prenuptiaux <- basefr$rapports_prenuptiaux %>%
+  fct_relevel(
+     "Oui", "Non"
+  )
+
+basefr <- basefr %>% 
+  mutate(score_connaissance_prevention = as.numeric(score_connaissance_prevention)) %>% 
+  mutate(score_connaissance_transmission = as.numeric(score_connaissance_transmission)) %>% 
+  mutate(score_connaissance_TME =  as.numeric(score_connaissance_TME)) %>% 
+  mutate(score_attitude = as.numeric(score_attitude))
+
+# Remplacement des valeurs manquantes sur les certaines variables----
+basefr$MV481 <- basefr$MV481 %>%
+  fct_explicit_na("Manquant")
+
+basefr$MV824 <- basefr$MV824 %>%
+  fct_explicit_na("Non-Applicable")
+
+basefr$MV833A <- basefr$MV833A %>%
+  fct_explicit_na("Non-Applicable")
+
+basefr$MV833B <- basefr$MV833B %>%
+  fct_explicit_na("Non-Applicable")
+
+basefr$MV833C <- basefr$MV833C %>%
+  fct_explicit_na("Non-Applicable")
+
+basefr <- basefr %>%
+  mutate(MV836 = replace_na(MV836,0))
+
+## Definition  des poids d'echantillonage----
+basefr<- basefr %>% 
+  mutate(poids = MV005/1000000)
+
+
+# Selection des cas et temoins----
+
+## Selection des cas et des temoins 
+cas <-  basefr %>% 
+  filter( MV826A <= 12 )
+
+temoin <-  basefr %>% 
+  filter( MV826A > 12 | MV781 == "Non" )
+
+
+## Definition de variable outcome
+basefr <- basefr %>% 
+  mutate(case_control = case_when(
+    MV826A <= 12 ~ "Dépisté",
+    MV826A > 12  ~ "Non Dépisté",
+    MV781 == "Non" ~"Non Dépisté"))
+
+## Réordonnancement de basefr$case_control
+basefr$case_control <- basefr$case_control %>%
+  fct_relevel(
+    "Non Dépisté", "Dépisté"
+  )
+
+# Exclusion des individus----
+
+## Excluons ceux qui n'ont jamais entendu parle du VIH car nous ne pourrons pas evaluer leur niveau Connaissance et attitudes
+
+basefr <- basefr %>%  
+  filter( MV751 != "Non" )
+
+base1<- basefr %>%
+  filter(MV781 == "Oui" & MV828 == "Oui") ## conserver ceux qui ont deja fait le test de depistage et qui ont recu le resultat
+
+base2 <-  basefr %>% 
+  filter(MV781 =="Non")  ## filter sur ceux qui non jamais ete depiste
+
+basefr <- bind_rows(base1,base2) #joindre les lignes des bases afin d'avoir un seul dataframe
+
+basefr <- basefr %>% 
+  filter( !is.na(MV525_r))
+
+rm(base1, base2, fusion) # suppression de base 1 et 2
+
+## Definition des etiquettes de variables
+labelled::var_label(basefr) <-list( MCASEID = "identifiant", MV001 = "numero de cluster", MV002 ="numero de menage", 
+                                    MV003 = "numero du repondant",MV005 = "poids de l'echantillon",
+                                    MV012="age",MV013= "tranche d'age", MV024 = "Region", MV025= "zone de residence",SEXE = "sexe",
+                                    MV106 ="niveau d'education" , MV130 ="Religion", MV190 = "index de richesse" ,
+                                    MV501 = "statut matrimonial", MV503 = "nombre d'union", MV504 = "vis actuellement avec son partenaire",
+                                    MV505 = "nombre de partenaire",MV525_r= "Rapports sexuels precoces (< 16 ans)", MV751= "deja entendu parler du VIH",
+                                    MV754CP="utiliser le preservatif reduit le risque d'infection",
+                                    MV754DP = " avoir un partenaire sexuel reduit le risque",
+                                    MV754WP ="Transmission par partage de nourriture" ,MV754JP = "Transmission par partage de nourriture",
+                                    MV756 ="une personne physiquement bien portante peut avoir le VIH",
+                                    MV766A="partenaire sexuel à l'exclusion du conjoint",   MV774A ="transmission au cours de la grossesse", 
+                                    MV774B="transmission au cours de l'accouchement",
+                                    MV774C ="transmission au cours de l'allaitement" ,MV777A ="J'aurais honte si un membre de la famille avait le VIH",
+                                    MV781 ="déjà été testé pour le VIH", MV783 ="Connaissance du lieu de depistage", 
+                                    MV823=" transmission par des moyens surnaturels", MV824 ="Existance des médicaments pour prevenir la TME pendant l'allaitement",
+                                    MV825= "Achat des légumes à un vendeur séropositif", MV833A =" préservatif toujours utilise lors des rapports sexuels avec le plus récent partenaire",
+                                    MV833B=" préservatif toujours utilise lors des rapports sexuels avec le deuxième partenaire le plus recent
+", MV833C=" préservatif toujours utilise lors des rapports sexuels avec le troisieme  partenaire le plus recent
+", MV836 ="Nombre total de partenaires sexuels au cours de la vie
+",MV856="Connaissance et utilisation des kits de dépistage du VIH
+", MV481 = "Couvert par l'assurance maladie", MV529 = "Duree depuis le dernier rapport sexuel",
+                                    MV714 = "Travaille actuellement",MV750 = "Déja  entendu parler des IST", MV763A = "A eu une IST au cours de 12 derniers mois",
+                                    MV858= "Peur d'entrer en contact avec la salive d'une personne ayant le VIH",MV766B ="Nombre de partenaires incluant le conjoint au cours des 12 derniers mois",
+                                    score_connaissance_prevention = "Score de connaissance des moyens de prevention" , score_connaissance_transmission = "Score de connaissance des moyens de transmission",
+                                    score_connaissance_TME = "Score de connaissance sur la transmission mère-enfant", score_attitude = "Score sur des attitudes discriminatoires",
+                                    rapports_multiples = " partenaires sexuelles au cours des 12 derniers mois",
+                                    MV857A ="Les enfants séropositifs devraient être autorisés à assister au cours comme les autres
+",MV857B ="les gens hésitent à faire un test du par peur des reactions des autres s'ils sont positifs
+",MV857C ="Les gens parlent mal des personnes séropositives", 
+                                    MV857D ="Les personnes séropositives ou soupçonnées d'être séropositives perdent leur respect",
+                                    MV826A = "temps ecoule depuis le derniers test",
+                                    MV828 = "connaissance du resultat du test")
+
+
+
+
+# Suppression des variables a present inutiles
+base_NON_NA <- basefr %>% 
+  select( -c(MV832B_days,MV852B_days,MV852A_days,MV832C_days,Si_2eme_partenaire,Si_3eme_partenaire,Si_1er_partenaire,MV527,MV825_rec,MV857A_rec,MV857D_rec,MV777A_rec,MV858_rec,MV852C_days,MV852C,MV852C, MV832B, MV832C, MV852B
+             ,MV503,MV504,MV505,MV529,MV852A,MV828, MV527_days,MV511,MV826A,MV791A))
+
+basefr <-  base_NON_NA
+
+
+
+```
+
+
+## Debut des analyses
+
+```{r,fig.width=10, fig.height=6}
+# Visualisation des valeurs manquantes
+library(naniar)
+
+vis_miss(basefr,warn_large_data = FALSE)
+
+```
+
+```{r,fig.width=10, fig.height=6}
+# Analyse descriptive des variables d'interets----
+
+## description des differents scores
+data_uni <-  basefr %>% 
+  pivot_longer( cols =  c(score_connaissance_prevention,score_connaissance_transmission,score_connaissance_TME), names_to = "type_score", values_to =  "scores")#reorganisationdu dataframe
+
+## distribution du score de connaissance
+
+ggplot(data_uni)+
+  aes( x = type_score , y = scores)+
+  geom_boxplot()+
+  ggtitle( "differents scores de connaissance")
+
+## distribution du score d'attitude
+ggplot(basefr)+
+  aes( y = score_attitude)+
+  geom_boxplot()+
+  ggtitle("scores d'attitude")
+
+## Distribution du nombre de partenaire au cours de la vie
+ggplot(basefr)+
+  aes( y = MV836)+
+  geom_boxplot()+
+  ggtitle("Nombre total de partenaires sexuels au cours de la vie")
+
+## Fixons a 10 le nombre de partenaires total au cours de la vie pour tout ceux ayant declaree avoir eu plus de 10 partenaires
+
+basefr <- basefr %>% 
+  mutate(MV836_r = ifelse( MV836 > 10, 10, MV836))
+
+ggplot(basefr)+
+  aes( y = MV836_r)+
+  geom_boxplot()+
+  ggtitle("Nombre total de partenaires sexuels au cours de la vie")
+
+labelled::var_label(basefr) <-list(  MV836_r = "Nombre total de partenaire au cours de la vie")
+
+```
+
+
+```{r}
+## Description des pratiques sexuelles
+
+basefr %>% 
+  tbl_summary( include = c("rapports_multiples","rapports_prenuptiaux","MV525_r", "MV836_r","MV833A",
+                           "MV833B", "MV833C")) %>% 
+  bold_labels() %>% 
+  
+  italicize_labels()
+
+## Description des caracteristiques socio demographiques
+basefr%>% 
+  tbl_summary( include = c("MV012","SEXE", "MV024","MV025","MV106",
+                           "MV130","MV190","MV481","MV714", "MV501")) %>% 
+  bold_labels() %>% 
+  
+  italicize_labels()
+
+
+```
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE,warning=FALSE}
+## Analyse Bivariee----
+
+##definition de l'objet d'enquete dp
+
+dp <- svydesign(ids = ~MV021, strata = ~MV023, weights =~poids, data= basefr) 
+
+## Caracteristiques sociodemographique entre cas et temoins
+dp%>% 
+  tbl_svysummary( include = c("MV012","SEXE", "MV024","MV025","MV106", "MV130","MV190","MV481","MV714", "MV501"),
+                  by = "case_control", statistic = list(all_categorical()~ "{n}({p}%)", all_continuous() ~ "{median} ({p25}, {p75})"),
+                  percent = "row",
+                  #digits =  all_categorical() ~ c(0,2)
+  ) %>% 
+  add_overall( last = TRUE) %>%
+  
+  add_p()%>% 
+  
+  add_stat_label()%>% 
+  
+  separate_p_footnotes() %>%
+  
+  bold_labels() %>%
+  
+  italicize_labels() #%>% 
+  #as_flex_table() #%>%  
+ #save_as_docx( path = "socio_demo.docx")
+
+## Comparaison des connaissances entre cas et temoins
+dp%>% 
+  tbl_svysummary( include = c("score_connaissance_prevention","MV754CP",
+                              "MV754DP",
+                              "score_connaissance_transmission","MV756","MV754JP",
+                              "MV823","MV754WP",
+                              "score_connaissance_TME","MV774C", "MV774B","MV774A",
+                              "MV824"),
+                  by = "case_control", statistic = list(all_categorical()~ "{n}({p}%)"),
+                  type = c(score_connaissance_prevention,score_connaissance_transmission,
+                           score_connaissance_TME) ~ "continuous",missing = "no",
+                  percent = "row"
+  ) %>% 
+  add_overall( last =TRUE) %>%
+  
+  add_p(test = list(all_continuous() ~ "svy.wilcox.test", all_categorical() ~ "svy.chisq.test"))%>% 
+  
+  add_stat_label()%>%   
+  
+  separate_p_footnotes() %>% 
+  
+  bold_labels() %>% 
+  
+  italicize_labels()# %>% 
+
+```
+
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE,warning=FALSE}
+
+## Attitudes entre cas te temoins
+
+dp%>% 
+  tbl_svysummary( include = c("score_attitude",
+                              "MV857A",
+                              "MV825", "MV857D", "MV777A","MV858"),
+                  by = "case_control", statistic = list(all_categorical()~ "{n}({p}%)"),
+                  type =  score_attitude ~ "continuous",missing = "no",
+                  percent = "row"
+  ) %>% 
+  add_overall( last =TRUE) %>%
+  
+  add_p(test = list(all_continuous() ~ "svy.wilcox.test", all_categorical() ~ "svy.chisq.test"))%>% 
+  
+  add_stat_label()%>%   
+  
+  separate_p_footnotes() %>% 
+  
+  bold_labels() %>% 
+  
+  italicize_labels() #%>% 
+
+```
+
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE,warning=FALSE}
+## Pratiques sexuelles entre cas et  temoins
+
+dp%>% 
+  tbl_svysummary( include = c("MV833A","MV833B", "MV833C","rapports_multiples","rapports_prenuptiaux","MV525_r",
+                              "MV836_r"),
+                  by = "case_control", statistic = list(all_categorical()~ "{n}({p}%)"),
+                  ,missing = "always",
+                  percent = "row"
+  ) %>% 
+  add_overall( last =TRUE) %>%
+  
+  add_p(test = list(all_continuous() ~ "svy.wilcox.test", all_categorical() ~ "svy.chisq.test"))%>% 
+  
+  add_stat_label()%>%   
+  
+  separate_p_footnotes() %>% 
+  
+  bold_labels() %>% 
+  
+  italicize_labels() #%>% 
+
+```
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE,warning=FALSE}
+## Recodage des variables pour la regression
+basefr$MV024 <- basefr$MV024 %>%
+  fct_recode(
+    "Regions septentrionales" = "Adamawa",
+    "Regions francophones" = "Centre (sans Yaoundé)",
+    "Métropoles" = "Douala",
+    "Regions francophones" = "Est",
+    "Regions septentrionales" = "Extrême-Nord",
+    "Regions francophones" = "Littoral (sans Douala)",
+    "Regions septentrionales" = "Nord",
+    "Regions anglophones" = "Nord-Ouest",
+    "Regions francophones" = "Ouest",
+    "Regions francophones" = "Sud",
+    "Regions anglophones" = "Sud-Ouest",
+    "Métropoles" = "Yaoundé"
+  )
+## Réordonnancement de basefr$MV501
+basefr$MV501 <- basefr$MV501 %>%
+  fct_relevel(
+    "Jamais en union", "Divorcé", "Marié", "Ne plus vivre ensemble/séparés",
+    "Veuf", "Vivre avec partenaire"
+  )
+## Réordonnancement de basefr$MV024
+basefr$MV024 <- basefr$MV024 %>%
+  fct_relevel(
+    "Regions francophones", "régions septentrionales", "Regions anglophones",
+    "Métropoles"
+  )
+labelled::var_label(basefr) <-list(  MV024 = "Region",
+                                     MV501 = "statut matrimonial")
+
+
+labelled::var_label(basefr) <-list(MV833A =" préservatif toujours utilise lors des rapports sexuels avec le plus récent partenaire",
+                                    MV833B=" préservatif toujours utilise lors des rapports sexuels avec le deuxième partenaire le plus recent
+", MV833C=" préservatif toujours utilise lors des rapports sexuels avec le troisieme  partenaire le plus recent
+", MV836 ="Nombre total de partenaires sexuels au cours de la vie", MV481 = "Couvert par l'assurance maladie")
+
+
+
+
+
+####definition de l'objet d'enquete dp2
+dp2 <- svydesign(ids = ~MV021, strata = ~MV023, weights =~poids, data= basefr) 
+
+
+```
+
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE,warning=FALSE}
+
+## Regression univariee----
+
+univ_tab <- dp2 %>% 
+  tbl_uvregression(
+    method = svyglm,
+    y = case_control,
+    method.args = list(family = quasibinomial()),
+    include = c(MV012,SEXE, MV024,MV025,MV106,MV130,MV190,MV481, MV501,MV525_r,rapports_multiples,rapports_prenuptiaux,MV836_r,MV833A, MV833B, MV833C,score_connaissance_prevention,score_connaissance_prevention,score_connaissance_TME,score_attitude,score_connaissance_transmission),
+    exponentiate = TRUE
+  )
+
+## Regression multivariée----
+
+model1 <-  svyglm(case_control~MV012+SEXE+MV024+MV025+MV106+MV130+MV190+MV481+MV501+MV525_r+rapports_multiples+rapports_prenuptiaux+MV836_r+MV833A+MV833B+MV833C+score_connaissance_prevention+score_connaissance_prevention+score_connaissance_TME+score_attitude+score_connaissance_transmission, family = "quasibinomial", design = dp2 )
+
+## Recherche du modele le plus parcimonieux en minimisant l'AIC
+
+model2 <-  step(model1)  ## selection pas a pas descendante a partie du model1
+
+## Verification de l'absence de multicolinearite
+
+library(car)
+
+vif(model2)
+
+
+mv_tab <- model2 %>% 
+  tbl_regression(exponentiate = TRUE)
+
+## Combinaison de la table regression univariée et multivariée
+
+tbl_merge(tbls = list(univ_tab, mv_tab),                          
+          tab_spanner = c("**Analyse Brute**", "**Analyse Ajustée**")) %>% 
+  bold_labels() %>% 
+  italicize_labels() #%>% 
+  #as_flex_table() #%>% 
+ # save_as_docx( path = "regression.docx")
+
+```
+
+## Resultats
+
+Dans l'analyse multivariée, plusieurs facteurs étaient significativement associés à la probabilité de dépistage du VIH. Les femmes présentaient une probabilité plus élevée de dépistage comparativement aux hommes (OR=1,46 ; IC 95 % : 1,32–1,61). Les résidents des régions anglophones (OR=2,15 ; IC 95 % : 1,84–2,52) et des métropoles (OR=1,51 ; IC 95 % : 1,30–1,76) étaient plus susceptibles de se faire dépister, tandis que ceux des régions septentrionales l’étaient moins (OR=0,71 ; IC 95 % : 0,60–0,83).
+
+Un niveau d'éducation élevé était associé à une probabilité plus importante de dépistage, les individus ayant un enseignement supérieur étant presque trois fois plus susceptibles d'avoir été testés (OR=2,98 ; IC 95 % : 2,42–3,66) que ceux sans éducation. De même, un indice de richesse plus élevé, une couverture par une assurance maladie, et un statut matrimonial différent du célibat étaient positivement associés au dépistage.
+
+Concernant les comportements sexuels, le nombre élevé de partenaires au cours des 12 derniers mois, l'utilisation systématique du préservatif et l'absence de rapports prénuptiaux étaient significativement associés au dépistage. Enfin, une meilleure connaissance des moyens de prévention et de transmission, ainsi que des attitudes moins discriminatoires, favorisaient la probabilité de dépistage.
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE,warning=FALSE}
+library(pROC)
+
+# Prédictions de probabilités
+prob_predictions <- predict.glm(model2, type = "response")
+
+# Tracer la courbe ROC
+roc_curve <- roc(dp2$variables$case_control, prob_predictions)
+
+# Calculer l'AUC
+auc_value <- auc(roc_curve)
+
+# Tracer la courbe ROC avec ggplot2 et ajouter la diagonale
+ggroc(roc_curve, color = "blue", size = 1.5) +
+  ggtitle("") +
+  xlab("Spécificité") +
+  ylab("Sensibilité") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)
+  ) +
+  annotate("text", x = 0.75, y = 0.25, label = paste("AUC =", round(auc_value, 2)), 
+           color = "red", size = 5, fontface = "bold")
+```
+
+L'AUC (Area Under the Curve) de 0,74 indique que le modèle a une bonne capacité de discrimination. Cela signifie que, dans 74 % des cas, le modèle est capable de différencier correctement entre les individus qui se sont fait dépister pour le VIH et ceux qui ne l'ont pas fait.
