@@ -10,7 +10,7 @@ L'objectif est de :
 
 ## Données utilisées
 
-- **Source** : Enquête démographique et de santé Cameroun (EDS 2018)
+- **Source** : Enquête démographique et de santé Cameroun (EDS 2018) [https://github.com/dimi-68/Child_Mortality_Factors_Cameroon]
 - **Variables principales** :
   - Connaissances sur le VIH/sida.
   - Attitudes envers les personnes vivant avec le VIH.
